@@ -277,7 +277,7 @@ class Portfolio:
         )
         df.index.name = 'Position Number'
 
-        with pandas.ExcelWriter(self.output) as writer:
+        with pandas.ExcelWriter(self.output, mode="a", engine="openpyxl", if_sheet_exists="replace") as writer:
             df.to_excel(writer, sheet_name="PYTR_PORTFOLIO_IMPORT")
 
         print(f"Wrote to file {self.output}")
