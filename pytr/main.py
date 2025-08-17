@@ -180,6 +180,36 @@ def get_main_parser():
         default="csv",
         help="The output file format.",
     )
+    #portfolio write
+    info = "Import Portfolio into existing Excel file specified in output"
+    parser_portfolio = parser_cmd.add_parser(
+        "import_portfolio_into_csv",
+        formatter_class=formatter,
+        parents=[parser_login_args, parser_lang, parser_decimal_localization],
+        help=info,
+        description=info,
+    )
+    parser_portfolio.add_argument(
+        "--include-watchlist",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Include watchlist.",
+    )
+
+    parser_portfolio.add_argument("-o", "--output", help="Output path of CSV file", type=Path)
+    parser_portfolio.add_argument(
+        "--sort-by-column",
+        type=str.lower,
+        choices=[col.lower() for col in PORTFOLIO_COLUMNS],
+        default=None,
+        help="Sort results by column.",
+    )
+    parser_portfolio.add_argument(
+        "--sort-ascending",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Whether to sort in ascending order.",
+    )
 
     # portfolio
     info = "Show current portfolio"
@@ -291,7 +321,7 @@ def get_main_parser():
     )
     parser_export_transactions.add_argument(
         "--format",
-        choices=("json", "csv"),
+        choices=("json", "csv", "sql3"),
         default="csv",
         help="The output file format.",
     )
@@ -333,7 +363,6 @@ def main():
 
     parser = get_main_parser()
     args = parser.parse_args()
-    # print(vars(args))
 
     log = get_logger(__name__, args.verbosity, args.debug_logfile, args.debug_log_filter)
     if args.verbosity.upper() == "DEBUG":
@@ -428,6 +457,22 @@ def main():
             sort_descending=not args.sort_ascending,
         )
         p.get()
+    elif args.command == "import_portfolio_into_csv":
+        p = Portfolio(
+            login(
+                phone_no=args.phone_no,
+                pin=args.pin,
+                web=not args.applogin,
+                store_credentials=args.store_credentials,
+            ),
+            args.include_watchlist,
+            lang=args.lang,
+            decimal_localization=args.decimal_localization,
+            output=args.output,
+            sort_by_column=args.sort_by_column,
+            sort_descending=not args.sort_ascending,
+        )
+        p.write()
     elif args.command == "export_transactions":
         events = [Event.from_dict(item) for item in json.load(args.input)]
         TransactionExporter(

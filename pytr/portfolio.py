@@ -6,6 +6,7 @@ from locale import getdefaultlocale
 from pathlib import Path
 from typing import Optional, Union
 
+import pandas as pandas
 from babel.numbers import format_decimal
 
 from .utils import get_logger, preview
@@ -225,6 +226,62 @@ class Portfolio:
 
         print(f"Wrote {len(csv_lines) + 1} lines to {self.output}")
 
+    def write_to_csv(self):
+        if self.output is None:
+            return
+
+        totalBuyCost = Decimal("0")
+        totalNetValue = Decimal("0")
+
+        csv_lines = []
+        for pos in sorted(self.portfolio, key=self._get_sort_func(), reverse=self.sort_descending):
+            buyCost = (Decimal(pos["averageBuyIn"]) * Decimal(pos["netSize"])).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            diff = pos["netValue"] - buyCost
+            diffP = 0.0 if buyCost == 0 else ((pos["netValue"] / buyCost) - 1) * 100
+            totalBuyCost += buyCost
+            totalNetValue += pos["netValue"]
+
+            csv_lines.append(
+                f"{pos['name']};"
+                f"{pos['instrumentId']};"
+                f"{Decimal(pos['averageBuyIn']):.2f};"
+                f"{Decimal(pos['netSize']):.6f};"
+                f"{buyCost:.2f};"
+                f"{pos['netValue']:.2f};"
+                f"{Decimal(pos['price']):.2f};"
+                f"{diff:.2f};"
+                f"{diffP:.1f}"
+            )
+
+            if not self.output:
+                print(
+                    f"{pos['name']:<25.25} "
+                    f"{pos['instrumentId']} "
+                    f"{Decimal(pos['averageBuyIn']):>10.2f} * "
+                    f"{Decimal(pos['netSize']):>10.6f} = "
+                    f"{buyCost:>10.2f} -> "
+                    f"{pos['netValue']:>10.2f} "
+                    f"{Decimal(pos['price']):>10.2f} "
+                    f"{diff:>10.2f} "
+                    f"{diffP:>7.1f}%"
+                )
+
+        Path(self.output).parent.mkdir(parents=True, exist_ok=True)
+        data = [line.split(";") for line in csv_lines]
+
+        df = pandas.DataFrame(
+            data,
+            columns=["Name", "ISIN", "Average Cost", "Quantity", "Buy Cost", "NetValue", "Price", "Delta", "Delta %"]
+        )
+        df.index.name = 'Position Number'
+
+        with pandas.ExcelWriter(self.output) as writer:
+            df.to_excel(writer, sheet_name="PYTR_PORTFOLIO_IMPORT")
+
+        print(f"Wrote to file {self.output}")
+
     def overview(self):
         totalBuyCost = Decimal("0")
         totalNetValue = Decimal("0")
@@ -274,3 +331,9 @@ class Portfolio:
 
         self.overview()
         self.portfolio_to_csv()
+
+    def write(self):
+        asyncio.get_event_loop().run_until_complete(self.portfolio_loop())
+
+        self.overview()
+        self.write_to_csv()
